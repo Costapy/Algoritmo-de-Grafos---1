@@ -90,22 +90,33 @@ def criar_grafo(n, m, denso=True):
     return g
 
 
+# -------------------------
+# Programa Principal
+# -------------------------
+
 if __name__ == "__main__":
-    # Criar o grafo com n vértices e m arestas
-    n, m = 6, 8
-    g = criar_grafo(n, m)
+    # Tamanhos diferentes de grafos para testar
+    tamanhos = [6, 20, 50, 100]
 
-    # Gera com Kruskal
-    mst_kruskal = kruskal(g)
-    print("\nMST (Kruskal):")
-    for e in mst_kruskal:
-        u, v = e.endpoints()
-        print(f"{u.element()} -- {v.element()} (peso {e.element()})")
-    desenhar_grafo_mst(g, mst_kruskal, usar_prim=False)
+    for n in tamanhos:
+        m = min(n * (n - 1) // 2, n * 4)  # número de arestas controlado
+        g = criar_grafo(n, m)
 
-    # Gera com Prim
-    mst_prim = prim(g)
-    print("\nMST (Prim):")
-    for u, v, peso in mst_prim:
-        print(f"{u.element()} -- {v.element()} (peso {peso})")
-    desenhar_grafo_mst(g, mst_prim, usar_prim=True)
+        print(f"\n==== Grafo com {n} vértices e {m} arestas ====")
+
+        # --- Kruskal ---
+        mst_kruskal = kruskal(g)
+        print("\nMST (Kruskal):")
+        for e in mst_kruskal:
+            u, v = e.endpoints()
+            print(f"{u.element()} -- {v.element()} (peso {e.element()})")
+        desenhar_grafo_mst(g, mst_kruskal, usar_prim=False,
+                           titulo=f"Grafo {n} vértices (Kruskal)")
+
+        # --- Prim ---
+        mst_prim = prim(g)
+        print("\nMST (Prim):")
+        for u, v, peso in mst_prim:
+            print(f"{u.element()} -- {v.element()} (peso {peso})")
+        desenhar_grafo_mst(g, mst_prim, usar_prim=True,
+                           titulo=f"Grafo {n} vértices (Prim)")
