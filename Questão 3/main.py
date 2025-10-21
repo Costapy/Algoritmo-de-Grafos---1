@@ -1,9 +1,8 @@
-import os
-import heapq
-import itertools
-import random
 import time
 import csv
+import os
+import random
+import heapq
 from grafo import Graph
 
 
@@ -11,131 +10,153 @@ from grafo import Graph
 # Algoritmos
 # -------------------------
 
+# Kruskal - Versão otimizada com Union-Find
+
+def criar_grafo_aleatorio(num_vertices, tipo):
+    G = Graph(directed=False)
+    vertices = [G.insert_vertex(str(i)) for i in range(num_vertices)]
+    arestas_existentes = set()
+
+    # Número máximo possível de arestas (grafo completo)
+    max_arestas = num_vertices * (num_vertices - 1) // 2
+
+    if tipo == "denso":
+        num_arestas = int(max_arestas * 0.98)
+    else:  # esparso
+        num_arestas = num_vertices * 2  # bem menor
+
+    while len(arestas_existentes) < num_arestas:
+        u = random.choice(vertices)
+        v = random.choice(vertices)
+        if u != v and (u, v) not in arestas_existentes and (v, u) not in arestas_existentes:
+            peso = random.randint(1, 100)
+            G.insert_edge(u, v, peso)
+            arestas_existentes.add((u, v))
+
+    print(f"Grafo {tipo.upper()} criado: {G.vertex_count()} vértices e {G.edge_count()} arestas.")
+    return G
+
+
+# ======================================================
+# === ALGORITMO DE KRUSKAL (COM UNION-FIND OTIMIZADO)
+# ======================================================
 def kruskal(graf):
     arestas = sorted(graf.edges(), key=lambda e: e.element())
     mst = []
-    
-    adj = {v: [] for v in graf.vertices()} 
-    def cria_ciclo(u, v):
-        visitado = set()
 
-        def dfs(atual, destino):
-            if atual == destino:
-                return True
-            visitado.add(atual)
-            for vizinho in adj[atual]:
-                if vizinho not in visitado:
-                    if dfs(vizinho, destino):
-                        return True
+    # Estrutura Union-Find
+    parent = {}
+    rank = {}
+
+    def find(v):
+        if parent[v] != v:
+            parent[v] = find(parent[v])
+        return parent[v]
+
+    def union(u, v):
+        raiz_u = find(u)
+        raiz_v = find(v)
+        if raiz_u == raiz_v:
             return False
+        if rank[raiz_u] < rank[raiz_v]:
+            parent[raiz_u] = raiz_v
+        elif rank[raiz_u] > rank[raiz_v]:
+            parent[raiz_v] = raiz_u
+        else:
+            parent[raiz_v] = raiz_u
+            rank[raiz_u] += 1
+        return True
 
-        return dfs(u, v)
+    # Inicializa o Union-Find
+    for v in graf.vertices():
+        parent[v] = v
+        rank[v] = 0
 
     for e in arestas:
         u, v = e.endpoints()
-        if not cria_ciclo(u, v):
+        if union(u, v):
             mst.append(e)
-            adj[u].append(v)
-            adj[v].append(u)
-
         if len(mst) == graf.vertex_count() - 1:
             break
 
     return mst
 
 
+# Prim - Versão com heapq e contador para evitar problemas de comparação
 def prim(graf):
-    start = next(iter(graf.vertices())) 
-    mst = [] 
+    start = next(iter(graf.vertices()))
+    mst = []
     visitados = {start}
-
     pq = []
-    contador = itertools.count()  # gera índices únicos para desempatar
 
     for e in graf.incident_edges(start):
         u, v = e.endpoints()
         outro = v if u == start else u
-        heapq.heappush(pq, (e.element(), next(contador), start, outro, e))
+        heapq.heappush(pq, (e.element(), id(start), id(outro), e))
 
     while pq and len(visitados) < graf.vertex_count():
-        peso, _, u, v, e = heapq.heappop(pq)
-        if v in visitados:
+        peso, _, _, e = heapq.heappop(pq)
+        while pq and (pq[0][3].endpoints()[0] in visitados and pq[0][3].endpoints()[1] in visitados):
+            heapq.heappop(pq)
+
+        u, v = e.endpoints()
+        if u in visitados and v in visitados:
             continue
+        novo = v if u in visitados else u
+        mst.append(e)
+        visitados.add(novo)
 
-        mst.append((u, v, peso))
-        visitados.add(v)
-
-        for f in graf.incident_edges(v):
+        for f in graf.incident_edges(novo):
             x, y = f.endpoints()
-            outro = y if x == v else x
+            outro = y if x == novo else x
             if outro not in visitados:
-                heapq.heappush(pq, (f.element(), next(contador), v, outro, f))
+                heapq.heappush(pq, (f.element(), random.random(), id(outro), f))
+
 
     return mst
 
 
 # -------------------------
-# Função para criar grafos
-# -------------------------
-
-def criar_grafo(n, m, denso=True):
-    g = Graph(directed=False)
-    vertices = [g.insert_vertex(str(i)) for i in range(n)]
-
-    arestas = set()
-    while len(arestas) < m:
-        u, v = random.sample(vertices, 2)
-        if (u, v) not in arestas and (v, u) not in arestas:
-            peso = random.randint(1, 100)
-            g.insert_edge(u, v, peso)
-            arestas.add((u, v))
-
-    return g
-
-
-# -------------------------
 # Experimento
 # -------------------------
+def medir_desempenho(num_vertices):
+    resultados = []
+    tipos = ["esparso", "denso"]
 
-def medir_tempo(func, *args):
-    inicio = time.perf_counter()
-    func(*args)
-    fim = time.perf_counter()
-    return fim - inicio
+    for tipo in tipos:
+        G = criar_grafo_aleatorio(num_vertices, tipo)
+
+        # Kruskal
+        inicio = time.time()
+        kruskal(G)
+        tempo_kruskal = time.time() - inicio
+
+        # Prim
+        inicio = time.time()
+        prim(G)
+        tempo_prim = time.time() - inicio
+
+        resultados.append((num_vertices, tipo, tempo_kruskal, tempo_prim))
+
+    return resultados
+
 
 
 if __name__ == "__main__":
-    tamanhos = [10, 50, 100, 500]
-    resultados = []
+    tamanhos = [10, 30, 50, 80, 100, 500]
+    resultados_finais = []
 
     for n in tamanhos:
-        # Grafo Denso (completo)
-        m_denso = n * (n - 1) // 2
-        G_denso = criar_grafo(n, m_denso, denso=True)
+        resultados_finais.extend(medir_desempenho(n))
 
-        # Grafo Esparso
-        m_esparso = (n - 1) * 4
-        G_esparso = criar_grafo(n, m_esparso, denso=False)
+    # Caminho do arquivo (mesmo diretório dos scripts)
+    caminho_arquivo = os.path.join(os.path.dirname(__file__), "resultados.csv")
 
-        # Testes de desempenho
-        for tipo, G in [("Denso", G_denso), ("Esparso", G_esparso)]:
-            print(f"\n==== Grafo {tipo} com {n} vértices ====")
-
-            tempo_kruskal = medir_tempo(kruskal, G)
-            tempo_prim = medir_tempo(prim, G)
-
-            print(f"Kruskal: {tempo_kruskal:.6f} segundos")
-            print(f"Prim:    {tempo_prim:.6f} segundos")
-
-            resultados.append([n, tipo, tempo_kruskal, tempo_prim])
-
-    # Salvar no diretório atual
-    pasta_atual = os.path.dirname(os.path.abspath(__file__))
-    caminho_csv = os.path.join(pasta_atual, "resultados.csv")
-
-    with open(caminho_csv, "w", newline="") as f:
+    # Salva resultados
+    with open(caminho_arquivo, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["Vertices", "Tipo", "Tempo_Kruskal", "Tempo_Prim"])
-        writer.writerows(resultados)
+        writer.writerows(resultados_finais)
 
-    print(f"\nResultados salvos em: {caminho_csv}")
+    print(f"\nResultados salvos em: {caminho_arquivo}")
+    print("Execução concluída ✅")
